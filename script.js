@@ -22,15 +22,29 @@ const sounds = {
     "vappu": "audio/vappu.mp3"
 };
 
+// Äänitiedostot valmiiksi ladattuina
+const preloadedSounds = {};
+let popSound = null;
 let currentPlayingAudio = null;
 let activeHotspot = null;
 let popupImage = null;
+let mainAudioTimeout = null;
 
 // Latauslogiikka
 document.addEventListener('DOMContentLoaded', function() {
     const container = document.querySelector('.container');
     const gameBoard = document.querySelector('.game-board');
     const imageWrapper = document.querySelector('.image-wrapper');
+    
+    // Alusta pop-ääni
+    popSound = new Audio('pop.mp3');
+    popSound.load();
+    
+    // Esilataa äänet
+    for (let key in sounds) {
+        preloadedSounds[key] = new Audio(sounds[key]);
+        preloadedSounds[key].load();
+    }
     
     // Lisää latausanimaatio
     const loader = document.createElement('div');
@@ -67,10 +81,13 @@ document.addEventListener('DOMContentLoaded', function() {
         resourcesToLoad.push(stopButton.src);
     }
     
-    // Äänitiedostot
+    // Äänitiedostot (kuvan latauksen seuranta)
     for (let key in sounds) {
         resourcesToLoad.push(sounds[key]);
     }
+    
+    // Lisää pop-ääni ladattaviin resursseihin
+    resourcesToLoad.push('pop.mp3');
     
     // Lataa kaikki resurssit
     let loadedCount = 0;
@@ -114,15 +131,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 img.onerror = resourceLoaded; // Jatka, vaikka kuva ei latautuisi
                 img.src = src;
             } else if (src.match(/\.(mp3|ogg|wav)$/i)) {
-                // Lataa äänitiedostot
-                const audio = new Audio();
-                audio.oncanplaythrough = resourceLoaded;
-                audio.onerror = resourceLoaded;
-                audio.src = src;
-                
-                // Joissain selaimissa oncanplaythrough ei laukea, jos audio ei ole liitetty DOMin
-                // Lisätään timeout varmuuden vuoksi
-                setTimeout(resourceLoaded, 3000);
+                // Äänitiedostot on jo ladattu aiemmin, mutta merkitään ne ladatuiksi tässä
+                resourceLoaded();
             } else {
                 // Jos resurssityyppi ei ole tunnettu, merkitse se ladatuksi
                 resourceLoaded();
@@ -135,24 +145,54 @@ document.addEventListener('DOMContentLoaded', function() {
 function initializeGameLogic() {
     function playSound(soundName, hotspotElement) {
         stopAllSounds();
-        if (sounds[soundName]) {
-            const audio = new Audio(sounds[soundName]);
-            audio.play();
-            currentPlayingAudio = audio;
-            fadeOtherHotspots(hotspotElement);
-            enlargeHotspot(hotspotElement);
-            audio.onended = resetState;
-        } else {
-            console.warn(`Ääntä ei löydy nimellä "${soundName}"`);
+        
+        // Soita pop-ääni ja lisää viive
+        if (popSound) {
+            popSound.currentTime = 0;
+            popSound.play();
         }
+        
+        // Lisää 1 sekunnin viive ennen varsinaisen äänen soittamista
+        mainAudioTimeout = setTimeout(() => {
+            // Soita varsinainen ääni 1 sekunnin viiveellä
+            if (preloadedSounds[soundName]) {
+                const audio = preloadedSounds[soundName];
+                audio.currentTime = 0;
+                audio.play();
+                currentPlayingAudio = audio;
+                fadeOtherHotspots(hotspotElement);
+                enlargeHotspot(hotspotElement);
+                audio.onended = resetState;
+            } else {
+                console.warn(`Ääntä ei löydy nimellä "${soundName}"`);
+                // Näytä silti hotspot, vaikka ääntä ei löytyisi
+                fadeOtherHotspots(hotspotElement);
+                enlargeHotspot(hotspotElement);
+            }
+        }, 1000);
     }
 
     function stopAllSounds() {
+        // Peruuta mahdollinen odottava äänentoisto
+        if (mainAudioTimeout) {
+            clearTimeout(mainAudioTimeout);
+            mainAudioTimeout = null;
+        }
+        
+        // Pysäytä pop-ääni jos se soi
+        if (popSound) {
+            popSound.pause();
+            popSound.currentTime = 0;
+        }
+        
+        // Pysäytä varsinainen ääni jos se soi
         if (currentPlayingAudio) {
             currentPlayingAudio.pause();
             currentPlayingAudio.currentTime = 0;
-            resetState();
+            currentPlayingAudio = null;
         }
+        
+        resetState();
     }
 
     function fadeOtherHotspots(exceptHotspot) {
@@ -213,13 +253,15 @@ function initializeGameLogic() {
             overlay.remove();
         }
         
-        document.querySelector('.stop-button').classList.remove('active');
+        const stopButton = document.querySelector('.stop-button');
+        if (stopButton) {
+            stopButton.classList.remove('active');
+        }
     }
 
     function resetState() {
         unfadeAllHotspots();
         shrinkHotspot();
-        currentPlayingAudio = null;
     }
 
     const hotspots = document.querySelectorAll('.hotspot');
@@ -235,18 +277,14 @@ function initializeGameLogic() {
         hotspot.addEventListener('click', function(e) {
             e.stopPropagation();
             hotspot.classList.add('active');
-            setTimeout(() => {
-                playSound(name, this);
-            }, 1000);
+            playSound(name, this);
         });
 
         hotspot.addEventListener('touchstart', function(e) {
             e.stopPropagation();
             e.preventDefault();
             hotspot.classList.add('active');
-            setTimeout(() => {
-                playSound(name, this);
-            }, 1000);
+            playSound(name, this);
         });
     });
 
