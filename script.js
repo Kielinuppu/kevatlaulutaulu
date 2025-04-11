@@ -19,7 +19,8 @@ const sounds = {
     "Retki": "audio/retki.mp3",
     "Siitepoly": "audio/siitepoly.mp3",
     "Valkovuokko": "audio/valkovuokko.mp3",
-    "vappu": "audio/vappu.mp3"
+    "vappu": "audio/vappu.mp3",
+    "kevat": "audio/kevat.mp3"
 };
 
 // Äänitiedostot valmiiksi ladattuina
